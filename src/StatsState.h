@@ -20,6 +20,10 @@ public:
     m_state(state) {
   }
 
+  std::unique_ptr<GameState> Clone() const override {
+    return std::make_unique<StatsState>(*this);
+  }
+
 protected:
   virtual void Init();
   virtual void Update();

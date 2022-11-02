@@ -98,13 +98,23 @@ class DrawingArea {
 public:
 
   DrawingArea(SDL_Window* sdl_window) :
-    m_sdl_window(sdl_window)
+    m_sdl_window(sdl_window),
+    m_game_thread(&DrawingArea::GamingLoop, this)
   {
+  }
+
+  ~DrawingArea()
+  {
+    m_game_thread.join();
   }
 
   bool GameLoop();
 
+  void GamingLoop();
+
   void PollEvent(SDL_Event& event);
+
+  void DrawLoop();
 
   virtual void on_configure_event();
 protected:
@@ -132,9 +142,8 @@ protected:
     return h;
   }
 
-
   SDL_Window* m_sdl_window;
-
+  std::thread m_game_thread;
 };
 
 void DrawingArea::PollEvent(SDL_Event& event)
@@ -364,18 +373,36 @@ void DrawingArea::on_hide_event(SDL_WindowEvent& event) {
 
 bool DrawingArea::GameLoop() {
 
-  if (window_state.IsActive()) {
+}
 
+void DrawingArea::GamingLoop()
+{
+  while (main_loop_running)
+  {
+    if (!window_state.IsActive())
+    {
+      SDL_Delay(10);
+      continue;
+    }
     state_manager->Update(window_state.JustActivated());
+    state_manager->SleepUntilNextUpdate();
+  }
+}
 
+void DrawingArea::DrawLoop() {
+
+  if (window_state.IsActive()) 
+  {
     Renderer rend(m_sdl_window);
     rend.SetVSyncInterval(vsync_interval);
 
     state_manager->Draw(rend);
-  }
 
-  return true;
+    glFlush ();
+    rend.SwapBuffers();
+  }
 }
+
 
 char* getCmdOption(char ** begin, char ** end, const std::string & option)
 {
@@ -657,22 +684,24 @@ int main(int argc, char *argv[]) {
       UserSetting::Set(MAX_KEY_KEY, max_key);
     }
 
-    DrawingArea da(sdl_window);
-    da.on_configure_event();
-    while (main_loop_running)
     {
-      SDL_Event Event;
-      while (SDL_PollEvent(&Event))
+      DrawingArea da(sdl_window);
+      da.on_configure_event();
+      while (main_loop_running)
       {
-        if (Event.type == SDL_QUIT)
+        SDL_Event Event;
+        while (SDL_PollEvent(&Event))
         {
-          main_loop_running = false;
-        } else 
-        {
-          da.PollEvent(Event);
+          if (Event.type == SDL_QUIT)
+          {
+            main_loop_running = false;
+          } else 
+          {
+            da.PollEvent(Event);
+          }
         }
+        da.DrawLoop();
       }
-      da.GameLoop();
     }
     midiStop();
     window_state.Deactivate();

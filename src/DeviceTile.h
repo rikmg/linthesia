@@ -30,9 +30,14 @@ enum DeviceTileType {
 class DeviceTile {
 public:
 
+  DeviceTile(DeviceTileType type, const MidiCommDescriptionList &device_list);
+
   DeviceTile(int x, int y, int device_id,
              DeviceTileType type, const MidiCommDescriptionList &device_list,
              Tga *button_graphics, Tga *frame_graphics);
+
+  void Init(int x, int y, int device_id, 
+            Tga *button_graphics, Tga *frame_graphics);
 
   void Update(const MouseInfo &translated_mouse);
   void Draw(Renderer &renderer) const;

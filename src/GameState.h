@@ -12,12 +12,15 @@
 #include <exception>
 #include <string>
 #include <map>
+#include <memory>
+#include <mutex>
 
 #include "Textures.h"
 #include "CompatibleSystem.h"
 #include "FrameCounter.h"
 #include "FrameAverage.h"
 #include "Renderer.h"
+
 
 class GameStateError : public std::exception {
 public:
@@ -113,8 +116,12 @@ public:
     m_last_delta_microseconds(0) {
   }
 
+
   virtual ~GameState() {
   }
+
+  // clones the current game state
+  virtual std::unique_ptr<GameState> Clone() const = 0;
 
 protected:
 
@@ -195,6 +202,7 @@ public:
     m_key_presses(0),
     m_last_key_presses(0),
     m_inside_update(false),
+    m_ups(500.0),
     m_fps(500.0),
     m_frameavg(5),
     m_show_fps(false),
@@ -230,6 +238,8 @@ public:
 
   void SetStateDimensions(int w, int h);
 
+
+  void SleepUntilNextUpdate();
 private:
   GameState *m_next_state;
   GameState *m_current_state;
@@ -237,12 +247,14 @@ private:
   unsigned long m_last_microseconds;
   unsigned long m_key_presses;
   unsigned long m_last_key_presses;
+  unsigned long m_last_draw_microseconds;
 
   bool m_inside_update;
 
   MouseInfo m_mouse;
 
   FrameCounter m_fps;
+  FrameCounter m_ups;
   FrameAverage m_frameavg;
   bool m_show_fps;
 
@@ -250,6 +262,8 @@ private:
   int m_screen_y;
 
   mutable std::map<Texture, Tga*> m_textures;
+
+  std::mutex m_state_mutex;
 };
 
 #endif // __GAMESTATE_H

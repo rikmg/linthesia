@@ -321,7 +321,6 @@ void KeyboardDisplay::DrawBars(Renderer &renderer, int x, int y, int y_offset,
    const SDL_Color bar_color (Renderer::ToColor(0x50,0x50,0x50));
    const SDL_Color text_color (Renderer::ToColor(0x50,0x50,0x50));
    for (; j != bar_line_usecs.end(); ++j, ++i) {
-      renderer.SetColor(bar_color);
       microseconds_t bar_usec = *j;
       // Skip previous bars
       if (bar_usec < current_time)
@@ -338,6 +337,7 @@ void KeyboardDisplay::DrawBars(Renderer &renderer, int x, int y, int y_offset,
 
       // Convert our times to pixel coordinates
       const int y_bar_offset = y - static_cast<int>(adjusted_offset * scaling_factor) + y_offset;
+      renderer.SetColor(bar_color);
       renderer.DrawQuad(x, y_bar_offset, final_width, 2);
 
       // Add a label with a bar number

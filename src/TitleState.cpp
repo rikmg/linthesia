@@ -30,13 +30,14 @@ const static string OutputKeySpecialDisabled = "[no output device]";
 const static string InputKeySpecialDisabled = "[no input device]";
 
 
-TitleState::~TitleState() {
+TitleState::TitleState(const SharedState &state):
+    m_state(state),
+    m_skip_next_mouse_up(false),
+    m_output_tile(DeviceTileOutput, MidiCommOut::GetDeviceList()),
+    m_input_tile(DeviceTileInput, MidiCommIn::GetDeviceList())    
+  {
+  }
 
-   if (m_output_tile) delete m_output_tile;
-   if (m_input_tile) delete m_input_tile;
-   if (m_file_tile) delete m_file_tile;
-   if (m_keyboard_size_tile) delete m_keyboard_size_tile;
-}
 
 void TitleState::Init() {
 
@@ -117,32 +118,25 @@ void TitleState::Init() {
    const int initial_y = (compress_height ? 230 : 360);
    const int each_y = (compress_height ? 94 : 100);
 
-   m_file_tile = new StringTile((GetStateWidth() - StringTileWidth) / 2,
+   m_file_tile = std::make_shared<StringTile>((GetStateWidth() - StringTileWidth) / 2,
                                 initial_y + each_y*0,
                                 GetTexture(SongBox));
 
    m_file_tile->SetString(m_state.song_title);
 
-   const MidiCommDescriptionList output_devices = MidiCommOut::GetDeviceList();
-   const MidiCommDescriptionList input_devices = MidiCommIn::GetDeviceList();
+   m_output_tile.Init((GetStateWidth() - DeviceTileWidth) / 2,
+                      initial_y + each_y*1,
+                      output_device_id,
+                      GetTexture(InterfaceButtons),
+                      GetTexture(OutputBox));
 
-   m_output_tile = new DeviceTile((GetStateWidth() - DeviceTileWidth) / 2,
-                                  initial_y + each_y*1,
-                                  output_device_id,
-                                  DeviceTileOutput,
-                                  output_devices,
-                                  GetTexture(InterfaceButtons),
-                                  GetTexture(OutputBox));
+   m_input_tile.Init((GetStateWidth() - DeviceTileWidth) / 2,
+                      initial_y + each_y*2,
+                      input_device_id,
+                      GetTexture(InterfaceButtons),
+                      GetTexture(InputBox));
 
-   m_input_tile = new DeviceTile((GetStateWidth() - DeviceTileWidth) / 2,
-                                 initial_y + each_y*2,
-                                 input_device_id,
-                                 DeviceTileInput,
-                                 input_devices,
-                                 GetTexture(InterfaceButtons),
-                                 GetTexture(InputBox));
-
-  m_keyboard_size_tile = new EnumTile(
+  m_keyboard_size_tile = std::make_shared<EnumTile>(
                                  (GetStateWidth() - DeviceTileWidth) / 2,
                                  initial_y + each_y*3,
                                  m_keyboard_size,
@@ -159,11 +153,11 @@ void TitleState::Resize() {
     m_file_tile->SetX((GetStateWidth() - StringTileWidth) / 2);
     m_file_tile->SetY(initial_y + each_y * 0);
 
-    m_output_tile->SetX((GetStateWidth() - DeviceTileWidth) / 2);
-    m_output_tile->SetY(initial_y + each_y * 1);
+    m_output_tile.SetX((GetStateWidth() - DeviceTileWidth) / 2);
+    m_output_tile.SetY(initial_y + each_y * 1);
     
-    m_input_tile->SetX((GetStateWidth() - DeviceTileWidth) / 2);
-    m_input_tile->SetY(initial_y + each_y*2);
+    m_input_tile.SetX((GetStateWidth() - DeviceTileWidth) / 2);
+    m_input_tile.SetY(initial_y + each_y*2);
 
     m_keyboard_size_tile->SetX((GetStateWidth() - DeviceTileWidth) / 2);
     m_keyboard_size_tile->SetY(initial_y + each_y*3);
@@ -178,8 +172,8 @@ void TitleState::Resize() {
 void TitleState::Update() {
   MidiCommOut::UpdateDeviceList();
   MidiCommIn::UpdateDeviceList();
-  m_input_tile->ReplaceDeviceList(MidiCommIn::GetDeviceList());
-  m_output_tile->ReplaceDeviceList(MidiCommOut::GetDeviceList());
+  m_input_tile.ReplaceDeviceList(MidiCommIn::GetDeviceList());
+  m_output_tile.ReplaceDeviceList(MidiCommOut::GetDeviceList());
 
   MouseInfo mouse = Mouse();
 
@@ -192,14 +186,14 @@ void TitleState::Update() {
   m_back_button.Update(mouse);
 
   MouseInfo output_mouse(mouse);
-  output_mouse.x -= m_output_tile->GetX();
-  output_mouse.y -= m_output_tile->GetY();
-  m_output_tile->Update(output_mouse);
+  output_mouse.x -= m_output_tile.GetX();
+  output_mouse.y -= m_output_tile.GetY();
+  m_output_tile.Update(output_mouse);
 
   MouseInfo input_mouse(mouse);
-  input_mouse.x -= m_input_tile->GetX();
-  input_mouse.y -= m_input_tile->GetY();
-  m_input_tile->Update(input_mouse);
+  input_mouse.x -= m_input_tile.GetX();
+  input_mouse.y -= m_input_tile.GetY();
+  m_input_tile.Update(input_mouse);
 
   MouseInfo keyboard_size_mouse(mouse);
   keyboard_size_mouse.x -= m_keyboard_size_tile->GetX();
@@ -217,14 +211,14 @@ void TitleState::Update() {
 
     if (m_state.midi_out) {
       m_state.midi_out->Reset();
-      m_output_tile->TurnOffPreview();
+      m_output_tile.TurnOffPreview();
     }
 
     ChangeState(new SongLibState(m_state));
   }
 
   // Check to see if we need to switch to a newly selected output device
-  int output_id = m_output_tile->GetDeviceId();
+  int output_id = m_output_tile.GetDeviceId();
   if (!m_state.midi_out ||
       output_id != static_cast<int>(m_state.midi_out->GetDeviceDescription().id)) {
 
@@ -248,10 +242,10 @@ void TitleState::Update() {
   }
 
   if (m_state.midi_out) {
-    if (m_output_tile->HitPreviewButton()) {
+    if (m_output_tile.HitPreviewButton()) {
       m_state.midi_out->Reset();
 
-      if (m_output_tile->IsPreviewOn()) {
+      if (m_output_tile.IsPreviewOn()) {
 
         const microseconds_t PreviewLeadIn  = 250000;
         const microseconds_t PreviewLeadOut = 250000;
@@ -266,7 +260,7 @@ void TitleState::Update() {
 
   }
 
-  int input_id = m_input_tile->GetDeviceId();
+  int input_id = m_input_tile.GetDeviceId();
    if (!m_state.midi_in ||
        input_id != static_cast<int>(m_state.midi_in->GetDeviceDescription().id)) {
 
@@ -337,27 +331,27 @@ void TitleState::Update() {
    if (m_file_tile->WholeTile().hovering)
      m_tooltip = "Click to choose a different MIDI file.";
 
-   if (m_input_tile->ButtonLeft().hovering)
+   if (m_input_tile.ButtonLeft().hovering)
      m_tooltip = "Cycle through available input devices.";
 
-   if (m_input_tile->ButtonRight().hovering)
+   if (m_input_tile.ButtonRight().hovering)
      m_tooltip = "Cycle through available input devices.";
 
-   if (m_input_tile->ButtonPreview().hovering) {
-     if (m_input_tile->IsPreviewOn())
+   if (m_input_tile.ButtonPreview().hovering) {
+     if (m_input_tile.IsPreviewOn())
        m_tooltip = "Turn off test MIDI input for this device.";
      else
        m_tooltip = "Click to test your MIDI input device by playing notes.";
    }
 
-   if (m_output_tile->ButtonLeft().hovering)
+   if (m_output_tile.ButtonLeft().hovering)
      m_tooltip = "Cycle through available output devices.";
 
-   if (m_output_tile->ButtonRight().hovering)
+   if (m_output_tile.ButtonRight().hovering)
      m_tooltip = "Cycle through available output devices.";
 
-   if (m_output_tile->ButtonPreview().hovering) {
-     if (m_output_tile->IsPreviewOn())
+   if (m_output_tile.ButtonPreview().hovering) {
+     if (m_output_tile.IsPreviewOn())
        m_tooltip = "Turn off output test for this device.";
       else
         m_tooltip = "Click to test MIDI output on this device.";
@@ -372,7 +366,7 @@ void TitleState::Update() {
 }
 
 void TitleState::PlayDevicePreview(microseconds_t delta_microseconds) {
-  if (!m_output_tile->IsPreviewOn())
+  if (!m_output_tile.IsPreviewOn())
     return;
 
   if (!m_state.midi_out)
@@ -412,18 +406,18 @@ void TitleState::Draw(Renderer &renderer) const {
   Layout::DrawButton(renderer, m_continue_button, GetTexture(ButtonChooseTracks));
   Layout::DrawButton(renderer, m_back_button, GetTexture(ButtonExit));
 
-  m_output_tile->Draw(renderer);
-  m_input_tile->Draw(renderer);
+  m_output_tile.Draw(renderer);
+  m_input_tile.Draw(renderer);
   m_file_tile->Draw(renderer);
   m_keyboard_size_tile->Draw(renderer);
 
-  if (m_input_tile->IsPreviewOn()) {
+  if (m_input_tile.IsPreviewOn()) {
 
     const static int PreviewWidth = 60;
     const static int PreviewHeight = 40;
 
-    const int x = m_input_tile->GetX() + DeviceTileWidth + 12;
-    const int y = m_input_tile->GetY() + 38;
+    const int x = m_input_tile.GetX() + DeviceTileWidth + 12;
+    const int y = m_input_tile.GetY() + 38;
 
     renderer.SetColor(0xFF, 0xFF, 0xFF);
     renderer.DrawQuad(x, y, PreviewWidth, PreviewHeight);
@@ -432,7 +426,7 @@ void TitleState::Draw(Renderer &renderer) const {
     renderer.DrawQuad(x+1, y+1, PreviewWidth-2, PreviewHeight-2);
 
     TextWriter last_note(x + PreviewWidth/2 - 1,
-                         m_input_tile->GetY() + 44,
+                         m_input_tile.GetY() + 44,
                          renderer, true, Layout::TitleFontSize);
 
     Widen<char> w;

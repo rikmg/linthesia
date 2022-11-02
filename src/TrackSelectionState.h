@@ -22,6 +22,10 @@ public:
 
   TrackSelectionState(const SharedState &state);
 
+  std::unique_ptr<GameState> Clone() const override {
+    return std::make_unique<TrackSelectionState>(*this);
+  }
+
 protected:
   virtual void Init();
   virtual void Update();

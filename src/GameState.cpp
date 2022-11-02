@@ -16,6 +16,7 @@
 // For FPS display
 #include "TextWriter.h"
 #include <iomanip>
+#include <thread>
 
 using namespace std;
 
@@ -138,9 +139,10 @@ GameStateManager::~GameStateManager() {
 Tga *GameStateManager::GetTexture(Texture tex_name, bool smooth) const {
 
   if (!m_textures[tex_name])
+  {
     m_textures[tex_name] = Tga::Load(TextureResourceNames[tex_name]);
-
-  m_textures[tex_name]->SetSmooth(smooth);
+    m_textures[tex_name]->SetSmooth(smooth);
+  }
   return m_textures[tex_name];
 }
 
@@ -236,6 +238,15 @@ void GameStateManager::ChangeState(GameState *new_state) {
   m_next_state = new_state;
 }
 
+void GameStateManager::SleepUntilNextUpdate() {
+  constexpr int updates_per_second = 200;
+  constexpr unsigned long update_microseconds = 1000000 / updates_per_second;
+  unsigned long next_update = m_last_microseconds - (m_last_microseconds % update_microseconds) + update_microseconds;
+  const unsigned long now = Compatible::GetMicroseconds();
+
+  std::this_thread::sleep_for(std::chrono::microseconds(next_update - now));
+}
+
 void GameStateManager::Update(bool skip_this_update) {
 
   // Manager's timer grows constantly
@@ -247,36 +258,17 @@ void GameStateManager::Update(bool skip_this_update) {
   if (skip_this_update)
     return;
 
-  m_fps.Frame(delta);
+  m_ups.Frame(delta);
   if (IsKeyReleased(KeyF6))
     m_show_fps = !m_show_fps;
 
-  if (m_next_state && m_current_state) {
-
-    m_current_state->Finish();
-    delete m_current_state;
-    m_current_state = 0;
-
-    // We return here to insert a blank frame (that may or may
-    // not last a long time) while the next state's Init()
-    // and first Update() are being called.
-    return;
-  }
-
-  if (m_next_state) {
-
-    m_current_state = m_next_state;
-    m_next_state = 0;
-
-    m_current_state->SetManager(this);
-  }
+  const std::lock_guard<std::mutex> lock(m_state_mutex);
 
   if (!m_current_state)
     return;
 
   m_inside_update = true;
 
-  m_fps.Frame(delta);
   m_frameavg.Frame(delta);
   unsigned long game_delta = m_frameavg.GetAverage();
 
@@ -297,8 +289,40 @@ void GameStateManager::Update(bool skip_this_update) {
 
 void GameStateManager::Draw(Renderer &renderer) {
 
-  if (!m_current_state)
-    return;
+  std::unique_ptr<GameState> state_copy;
+  {
+    const std::lock_guard<std::mutex> lock(m_state_mutex);
+
+    if (m_next_state && m_current_state) {
+
+      m_current_state->Finish();
+      delete m_current_state;
+      m_current_state = 0;
+
+      // We return here to insert a blank frame (that may or may
+      // not last a long time) while the next state's Init()
+      // and first Update() are being called.
+      return;
+    }
+
+    if (m_next_state) {
+
+      m_current_state = m_next_state;
+      m_next_state = 0;
+
+      m_current_state->SetManager(this);
+    }
+
+    if (!m_current_state)
+      return;
+
+    state_copy = m_current_state->Clone();
+  };
+
+  const unsigned long now = Compatible::GetMicroseconds();
+  const unsigned long delta = now - m_last_draw_microseconds;
+  m_last_draw_microseconds = now;
+  m_fps.Frame(delta);
 
   // NOTE: Sweet transition effects are *very* possible here... rendering
   // the previous state *and* the current state during some transition
@@ -314,15 +338,15 @@ void GameStateManager::Draw(Renderer &renderer) {
   glScalef (1., -1., 1.);
   glTranslatef(0.375, 0.375, 0.);
 
-  m_current_state->Draw(renderer);
+  state_copy->Draw(renderer);
 
   if (m_show_fps) {
     renderer.SetColor(White);
     TextWriter fps_writer(0, 0, renderer);
-    fps_writer << "FPS: " << STRING(setprecision(2) << fixed << m_fps.GetFramesPerSecond());
+    fps_writer << "FPS/UPS = " << STRING(setprecision(2) << fixed << m_fps.GetFramesPerSecond()) << "/" 
+                               << STRING(setprecision(2) << fixed << m_ups.GetFramesPerSecond()) ;
   }
 
-  glFlush ();
-  renderer.SwapBuffers();
+
 }
 

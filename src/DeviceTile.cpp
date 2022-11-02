@@ -14,24 +14,42 @@
 const static int GraphicWidth = 36;
 const static int GraphicHeight = 36;
 
-DeviceTile::DeviceTile(int x, int y, int device_id, DeviceTileType type,
-                       const MidiCommDescriptionList &device_list,
-                       Tga *button_graphics, Tga *frame_graphics) :
-  m_x(x),
-  m_y(y),
+DeviceTile::DeviceTile(DeviceTileType type,
+                       const MidiCommDescriptionList &device_list) :
+  m_x(0),
+  m_y(0),
   m_preview_on(false),
-  m_device_id(device_id),
+  m_device_id(-1),
   m_device_list(device_list),
   m_tile_type(type),
-  m_button_graphics(button_graphics),
-  m_frame_graphics(frame_graphics) {
-
+  m_button_graphics(nullptr),
+  m_frame_graphics(nullptr) 
+{
   // Initialize the size and position of each button
   whole_tile = ButtonState(0, 0, DeviceTileWidth, DeviceTileHeight);
   button_mode_left  = ButtonState(  6, 38, GraphicWidth, GraphicHeight);
   button_mode_right = ButtonState(428, 38, GraphicWidth, GraphicHeight);
   button_preview    = ButtonState(469, 38, GraphicWidth, GraphicHeight);
 }
+
+DeviceTile::DeviceTile(int x, int y, int device_id, DeviceTileType type,
+                       const MidiCommDescriptionList &device_list,
+                       Tga *button_graphics, Tga *frame_graphics) : 
+  DeviceTile(type, device_list) 
+{
+    Init(x, y, device_id, button_graphics, frame_graphics);
+}
+
+void DeviceTile::Init(int x, int y, int device_id, 
+                       Tga *button_graphics, Tga *frame_graphics)
+{
+  m_x = x;
+  m_y = y;
+  m_device_id = device_id;
+  m_button_graphics = button_graphics;
+  m_frame_graphics = frame_graphics;
+}
+
 
 void DeviceTile::Update(const MouseInfo &translated_mouse) {
 

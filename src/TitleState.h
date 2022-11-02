@@ -27,16 +27,11 @@ public:
 
   // You can pass 0 in for state.midi_out to have the title
   // screen pick a device for you.
-  TitleState(const SharedState &state) :
-    m_state(state),
-    m_output_tile(0),
-    m_input_tile(0),
-    m_file_tile(0),
-    m_keyboard_size_tile(nullptr),
-    m_skip_next_mouse_up(false) {
-  }
+  TitleState(const SharedState &state);
 
-  ~TitleState();
+  std::unique_ptr<GameState> Clone() const override {
+    return std::make_unique<TitleState>(*this);
+  }
 
 protected:
   virtual void Init();
@@ -57,11 +52,11 @@ private:
   std::string m_last_input_note_name;
   std::string m_tooltip;
 
-  DeviceTile *m_output_tile;
-  DeviceTile *m_input_tile;
+  DeviceTile m_output_tile;
+  DeviceTile m_input_tile;
 
-  EnumTile *m_keyboard_size_tile;
-  StringTile *m_file_tile;
+  std::shared_ptr<EnumTile> m_keyboard_size_tile;
+  std::shared_ptr<StringTile> m_file_tile;
 
   bool m_skip_next_mouse_up;
 };
